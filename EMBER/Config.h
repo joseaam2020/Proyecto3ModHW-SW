@@ -26,6 +26,11 @@
 // Tiempo en Reinicio/Recuperación antes de volver a Reposo (fin de día).
 #define PERIODO_REINICIO_MS     (24UL * 60UL * 60UL * 1000UL)  // 24 h
 
+// Recordatorio háptico mientras el tótem está en Riesgo/Inactividad:
+// vibra DURACION_RECORDATORIO_RIESGO_MS cada INTERVALO_RECORDATORIO_RIESGO_MS.
+#define INTERVALO_RECORDATORIO_RIESGO_MS (60UL * 60UL * 1000UL) // 1 h
+#define DURACION_RECORDATORIO_RIESGO_MS  (3UL * 1000UL)         // 3 s
+
 // ── Hitos de continuidad (días consecutivos) ────────────────────────
 #define HITO_DIAS_1 7
 #define HITO_DIAS_2 30
