@@ -40,4 +40,13 @@
 // Intervalo de refresco parcial del reloj mientras el tótem está en Reposo.
 #define INTERVALO_RELOJ_MS      (60UL * 1000UL)                // 1 min
 
+// ── Sensores ─────────────────────────────────────────────────────────
+#define UMBRAL_PROXIMIDAD_CM    30.0f
+#define SENSIBILIDAD_TACTIL     1.0f
+
+// ── Estado Ingreso Diario ────────────────────────────────────────────
+// Cuánto se mantiene la confirmación visual antes de volver a Reposo
+// ("Termina periodo" en el diagrama de estados).
+#define DURACION_CONFIRMACION_MS (5UL * 1000UL)                // 5 s
+
 #endif
