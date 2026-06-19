@@ -1,4 +1,6 @@
 #include "PantallaEInk.h"
+#include "Racha.h"
+#include "Hito.h"
 #include <stdlib.h>
 
 // Layout en coordenadas LÓGICAS (canvas portrait 300×400, origen top-left,
