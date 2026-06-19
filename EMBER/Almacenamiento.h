@@ -16,6 +16,12 @@ class Almacenamiento {
     void guardarRacha(Racha &racha);
     void cargarRacha(Racha &racha);
 
+    // Última hora real conocida (recibida del backend más adelante).
+    // Se persiste para que un reinicio arranque desde ahí en vez de 00:00,
+    // aunque se desactualice mientras no haya una nueva sincronización.
+    void guardarHora(uint8_t horas, uint8_t minutos);
+    void cargarHora(uint8_t &horas, uint8_t &minutos);
+
     // Cola de eventos no confirmados con la app (CU-02/CU-04, escenarios
     // de pérdida de conexión). Solo guarda los deltas, no toda la racha.
     void encolarEvento(TipoEventoSync tipo);

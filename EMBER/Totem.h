@@ -25,7 +25,12 @@ class Totem {
 
     void cambiarEstado(SystemState e);
 
-    // Placeholder: el envío real por BLE llega en la Etapa 8.
+    // Fija la hora "real" (recibida del backend en la Etapa 11). A partir
+    // de aquí, el reloj mostrado es horas:minutos + lo transcurrido desde
+    // esta llamada — no vuelve a depender de millis()-desde-boot.
+    void establecerHora(uint8_t horas, uint8_t minutos);
+
+    // Placeholder: el envío real por Wi-Fi/HTTP llega en la Etapa 11.
     void sincronizarConApp();
 
     // Revisa los timeouts de la máquina de estados y dispara las
@@ -56,9 +61,16 @@ class Totem {
     unsigned long tiempoEntradaEstado;
     unsigned long ultimoRefrescoReloj;
 
-    // Hora "de relleno" derivada de millis() hasta que la Etapa 7/8
-    // aporten una fuente de tiempo real.
-    void refrescarRelojPlaceholder();
+    // Hora base conocida (última recibida del backend, o la persistida de
+    // un encendido anterior) + el millis() en que se fijó. El reloj actual
+    // se calcula sumando los minutos transcurridos desde horaBaseMillis.
+    uint8_t horaBaseHoras;
+    uint8_t horaBaseMinutos;
+    unsigned long horaBaseMillis;
+
+    // Calcula horas:minutos actuales a partir de la hora base + lo
+    // transcurrido, y los envía a PantallaEInk.
+    void refrescarReloj();
 
     // Encola un evento si no hay conexión con la app (CU-02/CU-04, alt
     // de pérdida de conexión). El envío inmediato cuando sí hay conexión

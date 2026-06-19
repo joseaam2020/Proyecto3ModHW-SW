@@ -8,7 +8,8 @@ Totem::Totem(const String &id)
     sensorTactil(TOUCH_PIN, SENSIBILIDAD_TACTIL),
     led(LED_R, LED_G, LED_B),
     motor(MOTOR_PIN),
-    tiempoEntradaEstado(0), ultimoRefrescoReloj(0) {
+    tiempoEntradaEstado(0), ultimoRefrescoReloj(0),
+    horaBaseHoras(0), horaBaseMinutos(0), horaBaseMillis(0) {
 }
 
 void Totem::encender() {
@@ -21,11 +22,17 @@ void Totem::encender() {
   almacenamiento.init();
   almacenamiento.cargarRacha(racha);
 
+  // Arranca desde la última hora conocida (de un encendido anterior) en
+  // vez de 00:00; se desactualiza con el tiempo apagado, pero se corrige
+  // en cuanto el backend sincronice (Etapa 11, vía establecerHora()).
+  almacenamiento.cargarHora(horaBaseHoras, horaBaseMinutos);
+  horaBaseMillis = millis();
+
   estadoActual = REPOSO;
   tiempoEntradaEstado = millis();
   led.aplicarEstado(REPOSO);
 
-  refrescarRelojPlaceholder();
+  refrescarReloj();
   pantalla.mostrarReloj();
   ultimoRefrescoReloj = millis();
 
@@ -78,9 +85,10 @@ void Totem::cambiarEstado(SystemState e) {
 }
 
 void Totem::sincronizarConApp() {
-  // TODO (Etapa 8): exponer estado/racha/hitos vía BLE y vaciar la cola
-  // de eventos pendientes. Por ahora solo se deja el punto de llamada.
-  Serial.println("[Totem] sincronizarConApp() pendiente (Etapa 8)");
+  // TODO (Etapa 11): exponer estado/racha/hitos vía Wi-Fi/HTTP, llamar
+  // establecerHora() con la hora que devuelva el backend, y vaciar la
+  // cola de eventos pendientes. Por ahora solo se deja el punto de llamada.
+  Serial.println("[Totem] sincronizarConApp() pendiente (Etapa 11)");
 }
 
 void Totem::verificarInactividad() {
@@ -128,12 +136,26 @@ void Totem::verificarInactividad() {
   }
 }
 
-void Totem::refrescarRelojPlaceholder() {
-  // Placeholder temporal: deriva una "hora" de millis() desde el boot.
-  // Se reemplaza por la hora real persistida/sincronizada en Etapa 7/8.
-  unsigned long segundosTotales = millis() / 1000UL;
-  uint8_t horas = (segundosTotales / 3600UL) % 24;
-  uint8_t minutos = (segundosTotales / 60UL) % 60;
+void Totem::establecerHora(uint8_t horas, uint8_t minutos) {
+  horaBaseHoras = horas;
+  horaBaseMinutos = minutos;
+  horaBaseMillis = millis();
+  almacenamiento.guardarHora(horas, minutos);
+
+  // Refleja la corrección de inmediato, sin esperar al próximo tick de
+  // INTERVALO_RELOJ_MS.
+  refrescarReloj();
+  pantalla.mostrarReloj();
+  ultimoRefrescoReloj = millis();
+}
+
+void Totem::refrescarReloj() {
+  // Hora base + minutos transcurridos desde que se fijó esa base.
+  unsigned long minutosTranscurridos = (millis() - horaBaseMillis) / 60000UL;
+  unsigned long totalMinutos = (unsigned long)horaBaseHoras * 60UL + horaBaseMinutos + minutosTranscurridos;
+
+  uint8_t horas = (totalMinutos / 60UL) % 24;
+  uint8_t minutos = totalMinutos % 60UL;
   pantalla.actualizarHora(horas, minutos);
 }
 
@@ -141,7 +163,7 @@ void Totem::registrarEventoPendiente(TipoEventoSync tipo) {
   if (!conectado) {
     almacenamiento.encolarEvento(tipo);
   }
-  // TODO (Etapa 8): si conectado, enviar de inmediato por BLE en vez de
+  // TODO (Etapa 11): si conectado, enviar de inmediato por HTTP en vez de
   // encolar (o encolar igual y dejar que sincronizarConApp() lo vacíe).
 }
 
@@ -154,7 +176,7 @@ void Totem::actualizar() {
       if (sensorTactil.leer()) {
         registrarContacto();
       } else if (millis() - ultimoRefrescoReloj >= INTERVALO_RELOJ_MS) {
-        refrescarRelojPlaceholder();
+        refrescarReloj();
         pantalla.mostrarReloj();
         ultimoRefrescoReloj = millis();
       }

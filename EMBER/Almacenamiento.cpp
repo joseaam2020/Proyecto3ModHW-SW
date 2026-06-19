@@ -46,6 +46,16 @@ void Almacenamiento::cargarHito(int indice, bool &celebrado, time_t &fechaAlcanz
   fechaAlcanzado = (time_t)prefs.getULong(keyFecha.c_str(), 0);
 }
 
+void Almacenamiento::guardarHora(uint8_t horas, uint8_t minutos) {
+  prefs.putUChar("hr_h", horas);
+  prefs.putUChar("hr_m", minutos);
+}
+
+void Almacenamiento::cargarHora(uint8_t &horas, uint8_t &minutos) {
+  horas = prefs.getUChar("hr_h", 0);
+  minutos = prefs.getUChar("hr_m", 0);
+}
+
 void Almacenamiento::encolarEvento(TipoEventoSync tipo) {
   int count = prefs.getInt("p_cnt", 0);
   if (count >= MAX_PENDIENTES) {
