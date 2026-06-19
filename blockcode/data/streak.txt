@@ -1,0 +1,6 @@
+{
+  "days": 0,
+  "best": 0,
+  "resets": 0,
+  "since": null
+}

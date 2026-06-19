@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>EMBER</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════
+       VISTA 1 — HOME / DASHBOARD
+  ═══════════════════════════════════════ -->
+  <div id="view-home" class="view active">
+    <header class="top-bar">
+      <span class="brand">EMBER</span>
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span class="status-label" id="home-status-label">conectado</span>
+      </div>
+    </header>
+
+    <main class="home-main">
+      <section class="streak-hero">
+        <div class="streak-number" id="home-days">0</div>
+        <div class="streak-suffix">
+          <span class="streak-label-top">DÍAS</span>
+          <span class="streak-label-bot">DE CONTINUIDAD</span>
+        </div>
+      </section>
+
+      <section class="progress-section">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="home-progress" style="width:0%"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="home-progress-label">0 / 7 días esta semana</span>
+        </div>
+      </section>
+
+      <section class="daily-msg card">
+        <p class="msg-label">MENSAJE DE HOY</p>
+        <p class="msg-text" id="home-msg">Cada día que eliges avanzar, refuerzas quién quieres ser.</p>
+      </section>
+
+      <section class="totem-status card">
+        <div class="totem-icon-wrap">
+          <div class="totem-orb" id="totem-orb"></div>
+        </div>
+        <div class="totem-info">
+          <p class="totem-label">TÓTEM</p>
+          <p class="totem-state" id="totem-state-label">En reposo</p>
+          <p class="totem-sub" id="totem-last">Sin contacto reciente</p>
+        </div>
+        <button class="totem-sync-btn" onclick="syncTotem()">↺</button>
+      </section>
+
+      <button class="cta-primary" onclick="nav('check-in')">Registrar presencia</button>
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       VISTA 2 — CHECK-IN
+  ═══════════════════════════════════════ -->
+  <div id="view-check-in" class="view">
+    <header class="top-bar">
+      <button class="back-btn" onclick="nav('home')">←</button>
+      <span class="brand">CHECK-IN</span>
+      <span></span>
+    </header>
+
+    <main class="checkin-main">
+      <section class="orb-section">
+        <div class="orb-ring outer"></div>
+        <div class="orb-ring mid"></div>
+        <div class="orb-core" id="orb-core">
+          <span class="orb-days" id="orb-days">0</span>
+          <span class="orb-unit">días</span>
+        </div>
+      </section>
+
+      <p class="checkin-instruction" id="checkin-msg">
+        Coloca tu mano sobre el tótem<br>o registra manualmente
+      </p>
+
+      <div class="state-badge" id="state-badge">
+        <span class="state-badge-dot"></span>
+        <span id="state-badge-text">Continuidad</span>
+      </div>
+
+      <button class="cta-primary cta-checkin" id="btn-checkin" onclick="doCheckin()">
+        Registrar hoy
+      </button>
+
+      <button class="cta-secondary" onclick="showResetConfirm()">
+        Reiniciar racha
+      </button>
+    </main>
+
+    <div class="modal-overlay" id="modal-reset" style="display:none">
+      <div class="modal-box">
+        <p class="modal-title">¿Reiniciar racha?</p>
+        <p class="modal-body">Tu contador volverá a 0. Tu historial se conservará.</p>
+        <div class="modal-actions">
+          <button class="cta-secondary" onclick="hideResetConfirm()">Cancelar</button>
+          <button class="cta-danger" onclick="doReset()">Sí, reiniciar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       VISTA 3 — HISTORIAL
+  ═══════════════════════════════════════ -->
+  <div id="view-history" class="view">
+    <header class="top-bar">
+      <button class="back-btn" onclick="nav('home')">←</button>
+      <span class="brand">HISTORIAL</span>
+      <span></span>
+    </header>
+
+    <main class="history-main">
+      <div class="history-summary">
+        <div class="hsummary-item">
+          <span class="hsummary-num" id="h-total-days">0</span>
+          <span class="hsummary-label">racha actual</span>
+        </div>
+        <div class="hsummary-divider"></div>
+        <div class="hsummary-item">
+          <span class="hsummary-num" id="h-best">0</span>
+          <span class="hsummary-label">mejor racha</span>
+        </div>
+        <div class="hsummary-divider"></div>
+        <div class="hsummary-item">
+          <span class="hsummary-num" id="h-resets">0</span>
+          <span class="hsummary-label">reinicios</span>
+        </div>
+      </div>
+
+      <section class="calendar-section">
+        <p class="section-label">Últimas 8 semanas</p>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-legend">
+          <span class="cal-dot dot-ok"></span><span>Registrado</span>
+          <span class="cal-dot dot-miss"></span><span>Sin registro</span>
+          <span class="cal-dot dot-reset"></span><span>Reinicio</span>
+        </div>
+      </section>
+
+      <section class="log-section">
+        <p class="section-label">Registros recientes</p>
+        <ul class="log-list" id="log-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       VISTA 4 — PERFIL
+  ═══════════════════════════════════════ -->
+  <div id="view-profile" class="view">
+    <header class="top-bar">
+      <button class="back-btn" onclick="nav('home')">←</button>
+      <span class="brand">PERFIL</span>
+      <span></span>
+    </header>
+
+    <main class="profile-main">
+      <div class="profile-avatar">
+        <div class="avatar-ring">
+          <div class="avatar-inner" id="profile-initials">—</div>
+        </div>
+        <p class="profile-name" id="profile-name-label">—</p>
+        <p class="profile-since">en proceso desde <span id="profile-since">—</span></p>
+      </div>
+
+      <section class="profile-card">
+        <p class="section-label">TÓTEM EMBER</p>
+        <div class="profile-row">
+          <span>Estado</span>
+          <span id="ptotem-state">En reposo</span>
+        </div>
+        <div class="profile-row">
+          <span>Último contacto</span>
+          <span id="ptotem-last">—</span>
+        </div>
+        <div class="profile-row">
+          <span>IP del dispositivo</span>
+          <span id="ptotem-ip">—</span>
+        </div>
+      </section>
+
+      <section class="profile-card">
+        <p class="section-label">CONFIGURACIÓN</p>
+        <div class="profile-row row-input">
+          <span>Nombre</span>
+          <input id="inp-name" type="text" placeholder="Tu nombre" />
+        </div>
+        <div class="profile-row row-input">
+          <span>Servidor</span>
+          <input id="inp-server" type="text" placeholder="http://localhost:5000" />
+        </div>
+        <button class="cta-secondary full-w" onclick="saveProfile()">Guardar</button>
+      </section>
+
+      <section class="profile-card">
+        <p class="section-label">MENSAJES DIARIOS</p>
+        <div id="msgs-list" class="msgs-preview"></div>
+        <div class="msg-add-row">
+          <input id="inp-new-msg" type="text" placeholder="Añadir mensaje..." />
+          <button class="add-msg-btn" onclick="addMessage()">+</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       NAV GLOBAL (una sola, fuera de las vistas)
+  ═══════════════════════════════════════ -->
+  <nav class="bottom-nav" id="global-nav">
+    <button class="nav-btn active" data-view="home" onclick="nav('home')">
+      <svg viewBox="0 0 24 24"><path d="M3 12L12 3l9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h3v-5h6v5h3a1 1 0 001-1v-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Inicio</span>
+    </button>
+    <button class="nav-btn" data-view="check-in" onclick="nav('check-in')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span>Check-in</span>
+    </button>
+    <button class="nav-btn" data-view="history" onclick="nav('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+      <span>Historial</span>
+    </button>
+    <button class="nav-btn" data-view="profile" onclick="nav('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <span>Perfil</span>
+    </button>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
