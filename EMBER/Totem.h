@@ -10,6 +10,8 @@
 #include "MotorVibrador.h"
 #include "PantallaEInk.h"
 #include "Racha.h"
+#include "Almacenamiento.h"
+#include "EventoPendiente.h"
 
 class Totem {
   public:
@@ -49,6 +51,7 @@ class Totem {
     MotorVibrador motor;
     PantallaEInk pantalla;
     Racha racha;
+    Almacenamiento almacenamiento;
 
     unsigned long tiempoEntradaEstado;
     unsigned long ultimoRefrescoReloj;
@@ -56,6 +59,11 @@ class Totem {
     // Hora "de relleno" derivada de millis() hasta que la Etapa 7/8
     // aporten una fuente de tiempo real.
     void refrescarRelojPlaceholder();
+
+    // Encola un evento si no hay conexión con la app (CU-02/CU-04, alt
+    // de pérdida de conexión). El envío inmediato cuando sí hay conexión
+    // se conecta en la Etapa 8.
+    void registrarEventoPendiente(TipoEventoSync tipo);
 };
 
 #endif

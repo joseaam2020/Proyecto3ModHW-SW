@@ -27,6 +27,10 @@ class Racha {
     time_t getFechaInicio() const;
     time_t getFechaUltimaInteraccion() const;
 
+    // Para Almacenamiento: restaura el estado cargado desde flash.
+    void restaurar(int dias, time_t inicio, time_t ultimaInteraccion, bool activa);
+    Hito& getHito(int indice); // indice 0-2
+
   private:
     int diasConsecutivos;
     time_t fechaInicio;

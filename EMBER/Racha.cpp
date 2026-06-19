@@ -35,6 +35,17 @@ Hito* Racha::verificarHito() {
   return nullptr;
 }
 
+void Racha::restaurar(int dias, time_t inicio, time_t ultimaInteraccion, bool activa) {
+  diasConsecutivos = dias;
+  fechaInicio = inicio;
+  fechaUltimaInteraccion = ultimaInteraccion;
+  this->activa = activa;
+}
+
+Hito& Racha::getHito(int indice) {
+  return hitos[indice];
+}
+
 bool Racha::estaActiva() const {
   return activa;
 }

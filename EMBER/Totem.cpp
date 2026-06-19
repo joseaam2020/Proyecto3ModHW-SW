@@ -18,8 +18,8 @@ void Totem::encender() {
   motor.init();
   pantalla.init();
 
-  // TODO (Etapa 7): cargar racha/hitos/offset de hora desde flash aquí,
-  // en vez de arrancar siempre desde cero.
+  almacenamiento.init();
+  almacenamiento.cargarRacha(racha);
 
   estadoActual = REPOSO;
   tiempoEntradaEstado = millis();
@@ -53,16 +53,20 @@ void Totem::registrarContacto() {
   sensorTactil.registrarContacto();
 
   racha.incrementar();
+  almacenamiento.guardarRacha(racha);
   pantalla.mostrarProgreso(racha);
 
   cambiarEstado(INGRESO_DIARIO);
   led.aplicarEstado(INGRESO_DIARIO);
   motor.aplicarEstado(INGRESO_DIARIO);
+  registrarEventoPendiente(EVT_INTERACCION);
 
   Hito *hito = racha.verificarHito();
   if (hito != nullptr) {
+    almacenamiento.guardarRacha(racha); // persiste el hito recién celebrado
     pantalla.mostrarHito(*hito);
     cambiarEstado(CELEBRACION);
+    registrarEventoPendiente(EVT_HITO);
   }
 
   sincronizarConApp();
@@ -107,8 +111,10 @@ void Totem::verificarInactividad() {
     case RIESGO_INACTIVIDAD:
       if (ahora - tiempoEntradaEstado >= PERIODO_RIESGO_MS) {
         racha.reiniciar();
+        almacenamiento.guardarRacha(racha);
         cambiarEstado(REINICIO_RECUPERACION);
         led.aplicarEstado(REINICIO_RECUPERACION);
+        registrarEventoPendiente(EVT_REINICIO);
         sincronizarConApp();
       }
       break;
@@ -129,6 +135,14 @@ void Totem::refrescarRelojPlaceholder() {
   uint8_t horas = (segundosTotales / 3600UL) % 24;
   uint8_t minutos = (segundosTotales / 60UL) % 60;
   pantalla.actualizarHora(horas, minutos);
+}
+
+void Totem::registrarEventoPendiente(TipoEventoSync tipo) {
+  if (!conectado) {
+    almacenamiento.encolarEvento(tipo);
+  }
+  // TODO (Etapa 8): si conectado, enviar de inmediato por BLE en vez de
+  // encolar (o encolar igual y dejar que sincronizarConApp() lo vacíe).
 }
 
 void Totem::actualizar() {

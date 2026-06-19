@@ -12,6 +12,10 @@ class Hito {
     bool estaAlcanzado(int dias) const;
     void marcarCelebrado();
 
+    // Para Almacenamiento: restaura el estado tal como se persistió,
+    // sin usar la hora actual (a diferencia de marcarCelebrado()).
+    void restaurar(bool celebrado, time_t fechaAlcanzado);
+
     int getDiasRequeridos() const;
     String getDescripcion() const;
     bool isCelebrado() const;

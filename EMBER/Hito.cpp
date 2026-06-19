@@ -18,6 +18,11 @@ void Hito::marcarCelebrado() {
   fechaAlcanzado = time(nullptr);
 }
 
+void Hito::restaurar(bool celebrado, time_t fechaAlcanzado) {
+  this->celebrado = celebrado;
+  this->fechaAlcanzado = fechaAlcanzado;
+}
+
 int Hito::getDiasRequeridos() const {
   return diasRequeridos;
 }
