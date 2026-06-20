@@ -23,6 +23,14 @@ void Racha::reiniciar() {
   activa = false;
   // fechaUltimaInteraccion se conserva como registro de la última
   // interacción antes de perder la racha.
+
+  // Los hitos son logros de LA racha actual, no de toda la vida del
+  // tótem: sin esto, una vez celebrado un hito (p. ej. 7 días) quedaba
+  // marcado para siempre, y una racha nueva que volviera a llegar a 7
+  // días jamás volvía a disparar la Celebración.
+  for (int i = 0; i < 3; i++) {
+    hitos[i].restaurar(false, 0);
+  }
 }
 
 Hito* Racha::verificarHito() {

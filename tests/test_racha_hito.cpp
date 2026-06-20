@@ -104,6 +104,19 @@ void test_racha_verificarHito() {
   ASSERT(hito30 != nullptr && hito30->getDiasRequeridos() == 30, "debe celebrarse el hito de 30 dias");
 }
 
+void test_racha_reiniciar_resetea_hitos() {
+  Racha r;
+  for (int i = 0; i < 7; i++) r.incrementar(); // dia 7, celebra el hito
+  ASSERT(r.verificarHito() != nullptr, "debe celebrarse el hito de 7 dias en la primera racha");
+
+  r.reiniciar(); // se perdio la racha
+
+  for (int i = 0; i < 7; i++) r.incrementar(); // segunda racha, llega a dia 7 otra vez
+  Hito *hito = r.verificarHito();
+  ASSERT(hito != nullptr, "una racha nueva que vuelve a llegar a 7 dias debe volver a celebrar el hito");
+  ASSERT(hito->isCelebrado(), "el hito recien celebrado de nuevo debe quedar marcado");
+}
+
 void test_racha_restaurar() {
   Racha r;
   r.restaurar(15, 1000, 2000, true);
@@ -121,6 +134,7 @@ int main() {
   test_racha_incrementar_primera_vez();
   test_racha_incrementar_no_reinicia_fechaInicio();
   test_racha_reiniciar();
+  test_racha_reiniciar_resetea_hitos();
   test_racha_verificarHito();
   test_racha_restaurar();
 
