@@ -109,3 +109,7 @@ void Almacenamiento::eliminarPendiente(int indice) {
 void Almacenamiento::limpiarPendientes() {
   prefs.putInt("p_cnt", 0);
 }
+
+void Almacenamiento::borrarTodo() {
+  prefs.clear(); // borra todas las claves del namespace "ember" (racha, hitos, hora, pendientes)
+}

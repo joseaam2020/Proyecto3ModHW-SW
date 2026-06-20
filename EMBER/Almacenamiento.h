@@ -30,6 +30,12 @@ class Almacenamiento {
     void eliminarPendiente(int indice); // quita uno ya confirmado, conserva el orden
     void limpiarPendientes();
 
+    // Borrado completo de flash (racha, hitos, hora, cola de pendientes)
+    // — solicitado desde la app (botón "Borrar memoria" en Perfil), no
+    // forma parte del flujo normal de pérdida de racha (eso es
+    // Racha::reiniciar(), que no toca flash directamente).
+    void borrarTodo();
+
   private:
     Preferences prefs;
     static const int MAX_PENDIENTES = 16;

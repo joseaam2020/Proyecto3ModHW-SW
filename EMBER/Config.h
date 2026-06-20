@@ -94,4 +94,16 @@
 // ("Termina periodo" en el diagrama de estados).
 #define DURACION_CONFIRMACION_MS (20UL * 1000UL)               // 20 s
 
+// ── Backend / app web (Etapa 11) ─────────────────────────────────────
+// El tótem es la fuente de verdad de la racha (ver ComunicacionApp):
+// el backend solo guarda lo que se le reporta, no recalcula días.
+// CAMBIAR estos valores según la red y el backend usados en la demo.
+#define WIFI_SSID     "E5576_4480"
+#define WIFI_PASSWORD "N974E2ELnTH"
+#define BACKEND_URL   "http://192.168.8.39:5000"
+
+// Cada cuánto se intenta sincronizar con el backend (vaciar la cola de
+// EventoPendiente y refrescar la hora) aunque no haya habido un toque.
+#define INTERVALO_SYNC_APP_MS (30UL * 1000UL)   // 30 s
+
 #endif

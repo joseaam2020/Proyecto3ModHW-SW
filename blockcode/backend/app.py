@@ -5,10 +5,18 @@ Gestiona el estado de sobriedad/continuidad del tótem EMBER.
 
 Endpoints:
   GET  /status          → estado actual (días, tótem, etc.)
-  POST /checkin         → registra un día de continuidad
-  POST /reset           → reinicia la racha
+  POST /checkin         → registra un día de continuidad (check-in manual desde la app)
+  POST /reset           → reinicia la racha (manual desde la app)
   POST /touch           → el ESP32 avisa de contacto táctil
   POST /proximity       → el ESP32 avisa de detección de proximidad
+  POST /device/sync     → el ESP32 (Totem) reporta su racha real (days/totem_state/event).
+                           El tótem es la fuente de verdad: este endpoint NO recalcula
+                           días por fecha calendario, solo guarda lo que reporta.
+  GET  /config/hora     → hora configurada para el tótem, proyectada a "ahora"
+  POST /config/hora     → configura la hora del tótem desde la app {horas, minutos}
+  POST /device/wipe     → solicita borrar la memoria del tótem (botón en Perfil)
+  GET  /device/wipe     → el ESP32 consulta si hay un borrado pendiente
+  POST /device/wipe/ack → el ESP32 confirma que ya borró su flash
   GET  /messages        → lista de mensajes del día
   POST /messages        → actualiza los mensajes del día
   GET  /history         → historial completo
@@ -16,8 +24,9 @@ Endpoints:
 
 Persistencia:
   data/streak.txt    → racha actual, mejor racha, reinicios, fecha de inicio
-  data/log.txt       → log de eventos (checkin, reset, touch, proximity)
+  data/log.txt       → log de eventos (checkin, reset, touch, proximity, device_sync)
   data/messages.txt  → mensajes motivacionales (uno por línea)
+  data/config.txt    → offset de hora configurada para el tótem
 """
 
 from flask import Flask, request, jsonify
@@ -34,6 +43,8 @@ BASE.mkdir(parents=True, exist_ok=True)
 STREAK_FILE  = BASE / "streak.txt"
 LOG_FILE     = BASE / "log.txt"
 MESSAGES_FILE= BASE / "messages.txt"
+CONFIG_FILE  = BASE / "config.txt"
+WIPE_FLAG_FILE = BASE / "wipe.flag"
 
 # ── Estado en memoria (caché) ───────────────────────────
 _lock  = threading.Lock()
@@ -133,6 +144,28 @@ def _read_messages():
 def _write_messages(msgs: list):
     MESSAGES_FILE.write_text(
         "\n".join(m.strip() for m in msgs if m.strip()),
+        encoding="utf-8"
+    )
+
+
+def _minutos_desde_medianoche(dt):
+    return dt.hour * 60 + dt.minute
+
+
+def _read_config_offset():
+    """Lee el offset (minutos) guardado, o None si nunca se configuró."""
+    if not CONFIG_FILE.exists():
+        return None
+    try:
+        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        return int(data["offset_min"])
+    except Exception:
+        return None
+
+
+def _write_config_offset(offset_min):
+    CONFIG_FILE.write_text(
+        json.dumps({"offset_min": offset_min}, ensure_ascii=False),
         encoding="utf-8"
     )
 
@@ -294,6 +327,123 @@ def proximity():
             "proximity":   active,
             "totem_state": _state["totem_state"],
         })
+
+
+@app.route("/device/sync", methods=["POST"])
+def device_sync():
+    """El ESP32 (Totem) reporta su racha real tras un toque, hito o
+    reinicio. A diferencia de /checkin, este endpoint NO recalcula días
+    por fecha calendario — el tótem ya decidió eso localmente (incluye
+    MODO_DEMO, donde un "día" no equivale a un día calendario)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        days = int(data["days"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"ok": False, "error": "days es requerido (entero)"}), 400
+
+    totem_state = data.get("totem_state", _state["totem_state"])
+    if totem_state not in TOTEM_STATES:
+        totem_state = _state["totem_state"]
+    evento = str(data.get("event", ""))
+
+    with _lock:
+        _state["days"] = days
+        if days > _state["best"]:
+            _state["best"] = days
+        if days > 0 and not _state["since"]:
+            _state["since"] = datetime.date.today().isoformat()
+        if days == 0:
+            _state["since"] = None
+        if evento == "reinicio":
+            _state["resets"] += 1
+        _state["totem_state"]  = totem_state
+        _state["last_contact"] = datetime.datetime.now().isoformat(timespec="seconds")
+        _state["pending_checkin"] = False
+
+        _write_streak(_state["days"], _state["best"], _state["resets"], _state["since"])
+        # Se usa "evento" (checkin|hito|reinicio) como type del log, en vez de
+        # un "device_sync" genérico, para que /history quede en el mismo
+        # vocabulario que ya usan /checkin ("checkin") y /reset ("reset") —
+        # así el frontend puede armar el calendario con una sola regla.
+        _append_log(evento or "device_sync", f"days={days} state={totem_state}")
+
+        return jsonify({
+            "ok":          True,
+            "days":        _state["days"],
+            "best":        _state["best"],
+            "totem_state": _state["totem_state"],
+        })
+
+
+@app.route("/config/hora", methods=["GET"])
+def get_hora():
+    """Hora configurada para el tótem, proyectada al momento actual del
+    servidor — así el ESP32 puede aplicarla en cada poll sin riesgo de
+    congelar su reloj (ver Totem::establecerHora())."""
+    offset_min = _read_config_offset()
+    if offset_min is None:
+        return jsonify({"ok": False, "error": "hora no configurada"}), 404
+
+    actual = (_minutos_desde_medianoche(datetime.datetime.now()) + offset_min) % 1440
+    return jsonify({"ok": True, "horas": actual // 60, "minutos": actual % 60})
+
+
+@app.route("/config/hora", methods=["POST"])
+def set_hora():
+    """Configura la hora del tótem desde la app: {horas, minutos}."""
+    data = request.get_json(silent=True) or {}
+    try:
+        horas   = int(data["horas"])
+        minutos = int(data["minutos"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"ok": False, "error": "horas y minutos son requeridos (enteros)"}), 400
+    if not (0 <= horas <= 23 and 0 <= minutos <= 59):
+        return jsonify({"ok": False, "error": "horas debe ser 0-23 y minutos 0-59"}), 400
+
+    objetivo   = horas * 60 + minutos
+    offset_min = (objetivo - _minutos_desde_medianoche(datetime.datetime.now())) % 1440
+    _write_config_offset(offset_min)
+
+    return jsonify({"ok": True, "horas": horas, "minutos": minutos})
+
+
+@app.route("/device/wipe", methods=["POST"])
+def device_wipe_request():
+    """Botón "Borrar memoria del tótem" en Perfil: limpia de inmediato el
+    estado/historial del backend, y deja una marca para que el ESP32
+    borre su flash (racha, hitos, hora) la próxima vez que sincronice
+    (ver Totem::sincronizarConApp())."""
+    with _lock:
+        _state["days"]            = 0
+        _state["best"]            = 0
+        _state["resets"]          = 0
+        _state["since"]           = None
+        _state["totem_state"]     = "idle"
+        _state["last_contact"]    = None
+        _state["pending_checkin"] = False
+
+        _write_streak(0, 0, 0, None)
+        LOG_FILE.write_text("", encoding="utf-8")
+        if CONFIG_FILE.exists():
+            CONFIG_FILE.unlink()
+        WIPE_FLAG_FILE.write_text("1", encoding="utf-8")
+
+    return jsonify({"ok": True})
+
+
+@app.route("/device/wipe", methods=["GET"])
+def device_wipe_status():
+    """El ESP32 consulta si hay un borrado de flash pendiente de aplicar."""
+    return jsonify({"ok": True, "pending": WIPE_FLAG_FILE.exists()})
+
+
+@app.route("/device/wipe/ack", methods=["POST"])
+def device_wipe_ack():
+    """El ESP32 confirma que ya borró su flash — sin esto, seguiría
+    borrándose en cada ciclo de sincronización para siempre."""
+    if WIPE_FLAG_FILE.exists():
+        WIPE_FLAG_FILE.unlink()
+    return jsonify({"ok": True})
 
 
 @app.route("/messages", methods=["GET"])

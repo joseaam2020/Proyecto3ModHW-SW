@@ -9,7 +9,7 @@ Totem::Totem(const String &id)
     led(LED_R, LED_G, LED_B),
     motor(MOTOR_PIN),
     tiempoEntradaEstado(0), ultimoRefrescoReloj(0),
-    ultimaLecturaProximidadMs(0),
+    ultimaLecturaProximidadMs(0), ultimoSyncAppMs(0),
     inicioDiaMs(0), yaInteractuoHoy(false), limiteRiesgoMs(0),
     horaBaseHoras(0), horaBaseMinutos(0), horaBaseMillis(0) {
 }
@@ -20,6 +20,7 @@ void Totem::encender() {
   led.init();
   motor.init();
   pantalla.init();
+  app.init();
 
   almacenamiento.init();
   almacenamiento.cargarRacha(racha);
@@ -39,6 +40,7 @@ void Totem::encender() {
 
   inicioDiaMs = millis();
   yaInteractuoHoy = false;
+  ultimoSyncAppMs = millis();
 
   refrescarReloj();
   pantalla.mostrarReloj();
@@ -138,11 +140,93 @@ void Totem::cambiarEstado(SystemState e) {
   Serial.println(nombreEstado(e));
 }
 
+// Traduce el estado interno al vocabulario que ya espera el backend
+// (idle|active|contact|risk|celebration, ver app.py TOTEM_STATES).
+// REINICIO_RECUPERACION no tiene un balde propio en el backend — se
+// reporta como "idle" (visualmente es lo más cercano); lo distintivo
+// de un reinicio ya lo lleva el campo "event" de reportarEstado().
+static const char* estadoParaBackend(SystemState e) {
+  switch (e) {
+    case REPOSO: return "idle";
+    case INGRESO_DIARIO: return "contact";
+    case CELEBRACION: return "celebration";
+    case RIESGO_INACTIVIDAD: return "risk";
+    case REINICIO_RECUPERACION: return "idle";
+  }
+  return "idle";
+}
+
+static const char* nombreEventoSync(TipoEventoSync t) {
+  switch (t) {
+    case EVT_INTERACCION: return "checkin";
+    case EVT_HITO: return "hito";
+    case EVT_REINICIO: return "reinicio";
+  }
+  return "checkin";
+}
+
 void Totem::sincronizarConApp() {
-  // TODO (Etapa 11): exponer estado/racha/hitos vía Wi-Fi/HTTP, llamar
-  // establecerHora() con la hora que devuelva el backend, y vaciar la
-  // cola de eventos pendientes. Por ahora solo se deja el punto de llamada.
-  Serial.println("[Totem] sincronizarConApp() pendiente (Etapa 11)");
+  conectado = app.estaConectado();
+  if (!conectado) {
+    return;
+  }
+
+  // Se revisa ANTES de vaciar la cola de pendientes: si hay un borrado
+  // solicitado, no tiene sentido reportar racha/hitos viejos justo antes
+  // de borrarlos (el backend ya se limpió a sí mismo al recibir el
+  // POST /device/wipe original — ver app.py). Termina aquí y deja el
+  // resto de sincronizarConApp() para el próximo ciclo, ya en blanco.
+  if (app.hayBorradoPendiente()) {
+    Serial.println("[Totem] borrado de memoria solicitado desde la app");
+    almacenamiento.borrarTodo(); // ya incluye la cola de pendientes
+    racha.reiniciar();
+
+    horaBaseHoras = 0;
+    horaBaseMinutos = 0;
+    horaBaseMillis = millis();
+
+    inicioDiaMs = millis();
+    yaInteractuoHoy = false;
+
+    cambiarEstado(REPOSO);
+    led.aplicarEstado(REPOSO);
+    refrescarReloj();
+    pantalla.mostrarReloj();
+    ultimoRefrescoReloj = millis();
+
+    app.confirmarBorrado();
+    return;
+  }
+
+  // Vacía la cola de EventoPendiente (Etapa 7) uno por uno: siempre se
+  // opera sobre el índice 0 porque eliminarPendiente() recorre el resto
+  // hacia adelante para llenar el hueco. Se reporta la racha ACTUAL en
+  // cada evento (la cola solo guarda tipo+timestamp, no una foto de los
+  // días en ese momento — ver Almacenamiento.h, "deltas, no racha
+  // completa"), así que si hay varios pendientes el backend recibe el
+  // mismo valor de días repetido hasta vaciarla; el resultado final es
+  // correcto, solo se pierde granularidad histórica en el log.
+  int pendientes = almacenamiento.contarPendientes();
+  for (int i = 0; i < pendientes; i++) {
+    EventoPendiente evento;
+    if (!almacenamiento.obtenerPendiente(0, evento)) {
+      break;
+    }
+
+    bool ok = app.reportarEstado(racha.getDiasConsecutivos(),
+                                  estadoParaBackend(estadoActual),
+                                  nombreEventoSync(evento.tipo));
+    if (!ok) {
+      Serial.println("[Totem] sincronizarConApp() fallo al reportar, reintenta despues");
+      break;
+    }
+    almacenamiento.eliminarPendiente(0);
+  }
+
+  uint8_t horas, minutos;
+  if (app.obtenerHora(horas, minutos)) {
+    establecerHora(horas, minutos);
+  }
 }
 
 void Totem::verificarInactividad() {
@@ -249,15 +333,23 @@ void Totem::refrescarReloj() {
 }
 
 void Totem::registrarEventoPendiente(TipoEventoSync tipo) {
-  if (!conectado) {
-    almacenamiento.encolarEvento(tipo);
-  }
-  // TODO (Etapa 11): si conectado, enviar de inmediato por HTTP en vez de
-  // encolar (o encolar igual y dejar que sincronizarConApp() lo vacíe).
+  // Siempre se encola, conectado o no: el llamador siempre invoca
+  // sincronizarConApp() justo después, que vacía la cola de inmediato si
+  // hay conexión. Si no hay conexión, se queda aquí para el próximo
+  // intento (periódico, ver INTERVALO_SYNC_APP_MS).
+  almacenamiento.encolarEvento(tipo);
 }
 
 void Totem::actualizar() {
   motor.actualizar(); // apaga el motor no bloqueante si corresponde
+
+  // Reintenta la cola de pendientes y refresca la hora aunque no haya
+  // habido toques: si no, alguien sin WiFi al momento de tocar se queda
+  // con la cola llena hasta el siguiente toque/hito/reinicio.
+  if (millis() - ultimoSyncAppMs >= INTERVALO_SYNC_APP_MS) {
+    sincronizarConApp();
+    ultimoSyncAppMs = millis();
+  }
 
   switch (estadoActual) {
     case REPOSO:

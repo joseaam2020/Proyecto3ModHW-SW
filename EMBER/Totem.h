@@ -12,6 +12,7 @@
 #include "Racha.h"
 #include "Almacenamiento.h"
 #include "EventoPendiente.h"
+#include "ComunicacionApp.h"
 
 class Totem {
   public:
@@ -25,12 +26,17 @@ class Totem {
 
     void cambiarEstado(SystemState e);
 
-    // Fija la hora "real" (recibida del backend en la Etapa 11). A partir
-    // de aquí, el reloj mostrado es horas:minutos + lo transcurrido desde
-    // esta llamada — no vuelve a depender de millis()-desde-boot.
+    // Fija la hora "real" (recibida del backend). A partir de aquí, el
+    // reloj mostrado es horas:minutos + lo transcurrido desde esta
+    // llamada — no vuelve a depender de millis()-desde-boot.
     void establecerHora(uint8_t horas, uint8_t minutos);
 
-    // Placeholder: el envío real por Wi-Fi/HTTP llega en la Etapa 11.
+    // Vacía la cola de EventoPendiente hacia el backend (uno por uno; se
+    // detiene en el primero que falle, para reintentar en el próximo
+    // ciclo) y refresca la hora si el backend tiene una configurada.
+    // Se llama tras cada toque/hito/reinicio y periódicamente desde
+    // actualizar() (ver INTERVALO_SYNC_APP_MS), para no depender solo de
+    // que haya interacción para reintentar o para que la hora avance.
     void sincronizarConApp();
 
     // Revisa los timeouts de la máquina de estados y dispara las
@@ -57,10 +63,12 @@ class Totem {
     PantallaEInk pantalla;
     Racha racha;
     Almacenamiento almacenamiento;
+    ComunicacionApp app;
 
     unsigned long tiempoEntradaEstado;
     unsigned long ultimoRefrescoReloj;
     unsigned long ultimaLecturaProximidadMs;
+    unsigned long ultimoSyncAppMs;
 
     // Horario fijo de "día" (ver DURACION_DIA_MS): inicioDiaMs marca
     // cuándo empezó el día actual; yaInteractuoHoy bloquea un segundo
