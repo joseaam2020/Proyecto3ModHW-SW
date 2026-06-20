@@ -22,7 +22,13 @@ let state = {
   ],
   log:        [],
   totem:      { state: 'idle', last: null },
-  checkedToday: false,
+
+  // Minutos por "día" para el calendario del historial — debe coincidir
+  // con DURACION_DIA_MS del tótem (EMBER/Config.h): 1440 (24h) en modo
+  // real, o el valor en minutos usado en MODO_DEMO (ej. 1). Sin esto, en
+  // demo todos los eventos caen en la misma fecha calendario y el
+  // historial se ve como si todo hubiera pasado "el mismo día".
+  duracion_dia_min: 1440,
 };
 
 function saveState() {
@@ -38,7 +44,6 @@ function loadState() {
 /* ── NAVEGACIÓN ───────────────────────────────────────── */
 const VIEWS = {
   'home':     'view-home',
-  'check-in': 'view-check-in',
   'history':  'view-history',
   'profile':  'view-profile',
 };
@@ -66,7 +71,6 @@ function nav(to) {
 
   // 4. Renderizar la vista
   if (to === 'home')       renderHome();
-  if (to === 'check-in')   renderCheckin();
   if (to === 'history')    renderHistory();
   if (to === 'profile')    renderProfile();
 
@@ -74,15 +78,30 @@ function nav(to) {
 }
 
 /* ── RENDER HOME ──────────────────────────────────────── */
+// Hitos de continuidad (ver EMBER/Config.h: HITO_DIAS_1/2/3).
+var HITOS = [7, 30, 90];
+
+function proximoHito(dias) {
+  for (var i = 0; i < HITOS.length; i++) {
+    if (dias < HITOS[i]) return HITOS[i];
+  }
+  return null; // ya se alcanzaron todos los hitos
+}
+
 function renderHome() {
   document.getElementById('home-days').textContent = state.days;
 
-  var weekDays = getWeekDays();
-  var checked  = weekDays.filter(function(d) { return isChecked(d); }).length;
-  var pct = weekDays.length ? (checked / weekDays.length) * 100 : 0;
-  document.getElementById('home-progress').style.width = pct + '%';
-  document.getElementById('home-progress-label').textContent =
-    checked + ' / ' + weekDays.length + ' días esta semana';
+  var hito = proximoHito(state.days);
+  if (hito === null) {
+    document.getElementById('home-progress').style.width = '100%';
+    document.getElementById('home-progress-label').textContent =
+      state.days + ' días — todos los hitos alcanzados';
+  } else {
+    var pct = (state.days / hito) * 100;
+    document.getElementById('home-progress').style.width = pct + '%';
+    document.getElementById('home-progress-label').textContent =
+      state.days + ' / ' + hito + ' días para el próximo hito';
+  }
 
   // Mensaje del día
   var msgs = state.messages.length ? state.messages : ['Sigue adelante.'];
@@ -101,110 +120,6 @@ function totemStateLabel(s) {
   return MAP[s] || 'Desconocido';
 }
 
-/* ── RENDER CHECK-IN ──────────────────────────────────── */
-function renderCheckin() {
-  document.getElementById('orb-days').textContent = state.days;
-
-  var alreadyDone = hasCheckedToday();
-  var btn = document.getElementById('btn-checkin');
-  btn.disabled = alreadyDone;
-  btn.textContent = alreadyDone ? '✓ Registrado hoy' : 'Registrar hoy';
-  btn.style.opacity = alreadyDone ? '.5' : '1';
-  btn.style.cursor  = alreadyDone ? 'default' : 'pointer';
-
-  document.getElementById('checkin-msg').innerHTML = alreadyDone
-    ? 'Ya registraste tu presencia hoy.<br>Hasta mañana.'
-    : 'Coloca tu mano sobre el tótem<br>o registra manualmente';
-
-  setStateBadge(state.totem.state === 'risk' ? 'risk' : 'ok');
-}
-
-function setStateBadge(type) {
-  var badge = document.getElementById('state-badge');
-  var text  = { ok: 'Continuidad', risk: 'En riesgo',
-                restart: 'Reinicio', celebrate: 'Celebración' };
-  badge.className = 'state-badge state-' + type;
-  document.getElementById('state-badge-text').textContent = text[type] || 'Continuidad';
-}
-
-/* ── CHECK-IN ACTION ─────────────────────────────────── */
-function doCheckin() {
-  if (hasCheckedToday()) { showToast('Ya registraste hoy'); return; }
-
-  fetch(API() + '/checkin', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  .then(function(res) { return res.json(); })
-  .then(function(data) {
-    if (data.ok) {
-      state.days         = data.days;
-      state.best         = data.best;
-      state.checkedToday = true;
-      state.totem.state  = data.totem_state || 'active';
-      state.totem.last   = new Date().toISOString();
-      state.log.unshift({ date: todayISO(), type: 'ok' });
-      saveState();
-      renderCheckin();
-      showToast('✓ Día ' + state.days + ' registrado');
-      animateCheckin();
-    } else {
-      showToast(data.error || 'Error al registrar');
-    }
-  })
-  .catch(function() {
-    // Offline: actualizar localmente
-    state.days++;
-    if (state.days > state.best) state.best = state.days;
-    state.checkedToday = true;
-    state.log.unshift({ date: todayISO(), type: 'ok' });
-    state.totem.last = new Date().toISOString();
-    saveState();
-    renderCheckin();
-    showToast('✓ Día ' + state.days + ' (sin conexión al servidor)');
-    animateCheckin();
-  });
-}
-
-function animateCheckin() {
-  var core = document.getElementById('orb-core');
-  core.style.transform = 'scale(1.18)';
-  core.style.transition = 'transform .3s ease';
-  setTimeout(function() { core.style.transform = 'scale(1)'; }, 400);
-}
-
-/* ── RESET ─────────────────────────────────────────────── */
-function showResetConfirm() { document.getElementById('modal-reset').style.display = 'flex'; }
-function hideResetConfirm() { document.getElementById('modal-reset').style.display = 'none'; }
-
-function doReset() {
-  hideResetConfirm();
-  fetch(API() + '/reset', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  .then(function(res) { return res.json(); })
-  .then(function() {
-    applyReset();
-    showToast('Racha reiniciada. Nuevo comienzo.');
-  })
-  .catch(function() {
-    applyReset();
-    showToast('Racha reiniciada (sin conexión)');
-  });
-}
-
-function applyReset() {
-  state.days = 0;
-  state.resets++;
-  state.checkedToday = false;
-  state.log.unshift({ date: todayISO(), type: 'reset' });
-  saveState();
-  renderCheckin();
-}
-
 /* ── SYNC TÓTEM ──────────────────────────────────────── */
 function syncTotem() {
   fetch(API() + '/status')
@@ -214,6 +129,7 @@ function syncTotem() {
     state.totem.last  = data.last_contact;
     if (typeof data.days === 'number') state.days = data.days;
     if (typeof data.best === 'number') state.best = data.best;
+    if (typeof data.resets === 'number') state.resets = data.resets;
     saveState();
     renderHome();
     showToast('Tótem sincronizado');
@@ -224,38 +140,83 @@ function syncTotem() {
 }
 
 /* ── RENDER HISTORIAL ─────────────────────────────────── */
+// type esperado en cada entrada de state.log (mismo vocabulario que
+// /history del backend): "checkin" | "hito" | "reset"/"reinicio" |
+// otros (touch/proximity, se ignoran para el calendario).
+function esIngreso(tipo)  { return tipo === 'checkin' || tipo === 'hito'; }
+function esReinicio(tipo) { return tipo === 'reset' || tipo === 'reinicio'; }
+
 function renderHistory() {
   document.getElementById('h-total-days').textContent = state.days;
   document.getElementById('h-best').textContent       = state.best;
   document.getElementById('h-resets').textContent      = state.resets;
   renderCalendar();
   renderLog();
+
+  // El tótem es quien registra los ingresos/reinicios reales — el
+  // calendario y el contador de reinicios deben reflejar /history, no
+  // solo lo que esta misma sesión de la app generó localmente.
+  fetch(API() + '/history?limit=500')
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (!data.ok) return;
+    state.resets = data.resets;
+    state.log    = data.entries; // [{ts, type, detail, date}]
+    saveState();
+    document.getElementById('h-resets').textContent = state.resets;
+    renderCalendar();
+    renderLog();
+  })
+  .catch(function() {});
 }
 
+// Agrupa por VENTANAS DE TIEMPO de duracion_dia_min minutos (no por
+// fecha calendario): con MODO_DEMO en el tótem, un "día" dura 1 min
+// real, así que agrupar por fecha calendario metía decenas de "días"
+// de racha en la misma celda. Usamos el "ts" completo (fecha+hora) de
+// cada entrada de log, no solo su "date", para poder ubicarla en la
+// ventana correcta.
 function renderCalendar() {
-  var grid  = document.getElementById('cal-grid');
-  var today = new Date();
-  var cells = [];
-  for (var i = 55; i >= 0; i--) {
-    var d = new Date(today);
-    d.setDate(d.getDate() - i);
-    cells.push(d);
-  }
+  var grid     = document.getElementById('cal-grid');
+  var ahora    = new Date();
+  var durMs    = duracionDiaMin() * 60 * 1000;
+  var n        = 56;
+
+  var label = document.getElementById('cal-section-label');
+  label.textContent = (duracionDiaMin() === 1440)
+    ? 'Últimas 8 semanas'
+    : ('Últimos ' + n + ' períodos de ' + duracionDiaMin() + ' min');
+
   grid.innerHTML = '';
-  cells.forEach(function(d) {
-    var iso   = toISO(d);
-    var entry = state.log.find(function(l) { return l.date === iso; });
-    var cell  = document.createElement('div');
+  for (var i = n - 1; i >= 0; i--) {
+    var finVentana    = new Date(ahora.getTime() - i * durMs);
+    var inicioVentana = new Date(finVentana.getTime() - durMs);
+
+    var deEsaVentana = state.log.filter(function(l) {
+      var t = new Date(l.ts || l.date).getTime();
+      return t > inicioVentana.getTime() && t <= finVentana.getTime();
+    });
+    var huboReinicio = deEsaVentana.some(function(l) { return esReinicio(l.type); });
+    var huboIngreso  = deEsaVentana.some(function(l) { return esIngreso(l.type); });
+
+    var cell = document.createElement('div');
     cell.className = 'cal-cell';
-    if (entry) {
-      cell.classList.add(entry.type === 'reset' ? 'reset' : 'ok');
-    } else if (d <= today) {
-      cell.classList.add('miss');
+    var esVentanaActual = (i === 0);
+    if (huboReinicio) {
+      cell.classList.add('reset');       // rojo: se perdió la racha en esa ventana
+    } else if (huboIngreso) {
+      cell.classList.add('ok');          // negro: se hizo ingreso en esa ventana
+    } else if (!esVentanaActual) {
+      cell.classList.add('miss');        // gris: no se hizo ingreso
     }
-    if (iso === todayISO()) cell.classList.add('today');
-    cell.title = iso;
+    if (esVentanaActual) cell.classList.add('today');
+    cell.title = inicioVentana.toLocaleString('es') + ' – ' + finVentana.toLocaleString('es');
     grid.appendChild(cell);
-  });
+  }
+}
+
+function duracionDiaMin() {
+  return state.duracion_dia_min || 1440;
 }
 
 function renderLog() {
@@ -266,12 +227,20 @@ function renderLog() {
     return;
   }
   ul.innerHTML = entries.map(function(e) {
-    var label  = e.type === 'ok' ? 'Check-in' : (e.type === 'reset' ? 'Reinicio' : 'Sin registro');
-    var badge  = e.type === 'ok' ? 'Registrado' : (e.type === 'reset' ? 'Reinicio' : 'Perdido');
+    var label, cls, badge;
+    if (esReinicio(e.type)) {
+      label = 'Reinicio'; cls = 'reset'; badge = 'Reinicio';
+    } else if (e.type === 'hito') {
+      label = 'Hito alcanzado'; cls = 'ok'; badge = 'Hito';
+    } else if (e.type === 'checkin') {
+      label = 'Check-in'; cls = 'ok'; badge = 'Registrado';
+    } else {
+      label = 'Sin registro'; cls = 'miss'; badge = 'Perdido';
+    }
     return '<li class="log-item">' +
       '<span>' + label + '</span>' +
       '<span class="log-date">' + fmtDate(e.date) + '</span>' +
-      '<span class="log-badge ' + e.type + '">' + badge + '</span>' +
+      '<span class="log-badge ' + cls + '">' + badge + '</span>' +
     '</li>';
   }).join('');
 }
@@ -287,6 +256,15 @@ function renderProfile() {
   document.getElementById('ptotem-state').textContent = totemStateLabel(state.totem.state);
   document.getElementById('ptotem-last').textContent  = state.totem.last ? fmtDatetime(state.totem.last) : '—';
   document.getElementById('ptotem-ip').textContent    = state.server_url || '—';
+
+  // Precarga la hora actual del dispositivo como punto de partida —
+  // el usuario solo necesita confirmar (o ajustar) y enviar.
+  var ahora = new Date();
+  document.getElementById('inp-hora').value =
+    String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+
+  document.getElementById('inp-duracion-dia').value = duracionDiaMin();
+
   renderMsgs();
 }
 
@@ -336,6 +314,69 @@ function saveProfile() {
   showToast('Perfil guardado');
 }
 
+function setHoraTotem() {
+  var valor = document.getElementById('inp-hora').value; // "HH:MM"
+  if (!valor) { showToast('Elige una hora primero'); return; }
+
+  var partes  = valor.split(':');
+  var horas   = parseInt(partes[0], 10);
+  var minutos = parseInt(partes[1], 10);
+
+  fetch(API() + '/config/hora', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ horas: horas, minutos: minutos })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.ok) {
+      showToast('Hora del tótem configurada: ' + valor);
+    } else {
+      showToast(data.error || 'Error al configurar la hora');
+    }
+  })
+  .catch(function() {
+    showToast('Sin conexión al servidor');
+  });
+}
+
+function setDuracionDia() {
+  var val = parseInt(document.getElementById('inp-duracion-dia').value, 10);
+  if (!val || val < 1) { showToast('Pon un número de minutos válido'); return; }
+  state.duracion_dia_min = val;
+  saveState();
+  showToast('Calendario ajustado a ' + val + ' min/día');
+}
+
+function borrarMemoriaTotem() {
+  var ok = confirm(
+    '¿Borrar toda la memoria del tótem?\n\n' +
+    'Esto reinicia la racha, los hitos y la hora guardados en el ESP32, ' +
+    'y borra el historial del backend. No se puede deshacer.'
+  );
+  if (!ok) return;
+
+  fetch(API() + '/device/wipe', { method: 'POST' })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (!data.ok) { showToast(data.error || 'No se pudo borrar la memoria'); return; }
+
+    state.days   = 0;
+    state.best   = 0;
+    state.resets = 0;
+    state.since  = null;
+    state.log    = [];
+    state.totem.state = 'idle';
+    state.totem.last  = null;
+    saveState();
+    renderProfile();
+    showToast('Memoria borrada. El tótem se actualizará en su próximo sync.');
+  })
+  .catch(function() {
+    showToast('Sin conexión al servidor');
+  });
+}
+
 /* ── UTILIDADES ───────────────────────────────────────── */
 function todayISO() {
   return toISO(new Date());
@@ -346,27 +387,6 @@ function toISO(d) {
   var m = String(d.getMonth() + 1).padStart(2, '0');
   var day = String(d.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + day;
-}
-
-function hasCheckedToday() {
-  var today = todayISO();
-  return state.log.some(function(l) { return l.date === today && l.type === 'ok'; });
-}
-
-function isChecked(dateStr) {
-  return state.log.some(function(l) { return l.date === dateStr && l.type === 'ok'; });
-}
-
-function getWeekDays() {
-  var today = new Date();
-  var days  = [];
-  var dow   = today.getDay();
-  for (var i = 0; i <= dow; i++) {
-    var d = new Date(today);
-    d.setDate(d.getDate() - (dow - i));
-    days.push(toISO(d));
-  }
-  return days;
 }
 
 function fmtDate(iso) {
@@ -397,7 +417,9 @@ function pollTotem() {
   .then(function(data) {
     state.totem.state = data.totem_state || 'idle';
     state.totem.last  = data.last_contact;
-    if (data.pending_checkin && !hasCheckedToday()) doCheckin();
+    if (typeof data.days === 'number') state.days = data.days;
+    if (typeof data.best === 'number') state.best = data.best;
+    if (typeof data.resets === 'number') state.resets = data.resets;
     saveState();
   })
   .catch(function() {});

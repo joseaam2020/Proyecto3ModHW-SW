@@ -279,135 +279,7 @@ body {
   width: 100%;
 }
 .cta-secondary:hover { background: var(--cream); }
-.cta-danger {
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: 100px;
-  padding: 14px 28px;
-  font-family: inherit;
-  font-size: .85rem;
-  font-weight: 600;
-  cursor: pointer;
-  flex: 1;
-}
-
-/* ── CHECK-IN ────────────────────────────────────────── */
-.checkin-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-  padding: 24px 24px 32px;
-}
-
-/* Orbe central */
-.orb-section {
-  position: relative;
-  width: 220px; height: 220px;
-  display: flex; align-items: center; justify-content: center;
-}
-.orb-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255,60,0,.2);
-  animation: orbit-pulse 3s ease-in-out infinite;
-}
-.orb-ring.outer { width: 210px; height: 210px; }
-.orb-ring.mid   { width: 168px; height: 168px; animation-delay: -.6s; }
-@keyframes orbit-pulse {
-  0%,100% { opacity: .3; transform: scale(1); }
-  50%      { opacity: .8; transform: scale(1.04); }
-}
-.orb-core {
-  position: relative;
-  width: 130px; height: 130px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 32%, #FFAA70, var(--ember-hi) 70%);
-  box-shadow:
-    0 0 40px rgba(255,60,0,.35),
-    0 0 80px rgba(255,60,0,.15);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  animation: breathe 2.8s ease-in-out infinite;
-}
-.orb-days {
-  font-size: 2.8rem;
-  font-weight: 700;
-  color: white;
-  line-height: 1;
-  letter-spacing: -.03em;
-}
-.orb-unit {
-  font-size: .65rem;
-  color: rgba(255,255,255,.8);
-  letter-spacing: .1em;
-  font-weight: 500;
-}
-
-.checkin-instruction {
-  text-align: center;
-  font-size: .9rem;
-  color: var(--smoke);
-  line-height: 1.6;
-}
-
-.state-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  color: white;
-  padding: 8px 18px;
-  border-radius: 100px;
-  font-size: .78rem;
-  font-weight: 500;
-  letter-spacing: .04em;
-}
-.state-badge-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--green);
-}
-.state-badge.state-risk .state-badge-dot    { background: #F59E0B; }
-.state-badge.state-restart .state-badge-dot { background: var(--accent); }
-.state-badge.state-celebrate .state-badge-dot { background: #A855F7; }
-
-.cta-checkin { margin-top: auto; }
-
-/* Modal */
-.modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(17,17,15,.7);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 50;
-  padding: 24px;
-}
-.modal-box {
-  background: white;
-  border-radius: var(--r) var(--r) 12px 12px;
-  padding: 28px 24px 24px;
-  width: 100%;
-  max-width: 400px;
-}
-.modal-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.modal-body {
-  font-size: .88rem;
-  color: var(--smoke);
-  margin-bottom: 24px;
-  line-height: 1.5;
-}
-.modal-actions { display: flex; gap: 10px; }
-.modal-actions .cta-secondary { flex: 1; }
+.cta-warning { color: var(--accent); border-color: var(--accent); }
 
 /* ── HISTORIAL ───────────────────────────────────────── */
 .history-main {
@@ -568,6 +440,7 @@ body {
 .profile-row:last-of-type { border-bottom: none; padding-bottom: 0; }
 .profile-row span:first-child { color: var(--smoke); }
 .profile-row span:last-child  { font-weight: 500; text-align: right; }
+.profile-hint { font-size: .75rem; color: var(--ash); margin: 0; }
 .row-input input {
   border: none;
   background: var(--bg);
@@ -658,5 +531,5 @@ body {
 
 /* ── REDUCED MOTION ──────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .totem-orb, .orb-core, .orb-ring { animation: none; }
+  .totem-orb { animation: none; }
 }

@@ -34,7 +34,7 @@
           <div class="progress-bar-fill" id="home-progress" style="width:0%"></div>
         </div>
         <div class="progress-meta">
-          <span id="home-progress-label">0 / 7 días esta semana</span>
+          <span id="home-progress-label">0 / 7 días para el próximo hito</span>
         </div>
       </section>
 
@@ -54,59 +54,7 @@
         </div>
         <button class="totem-sync-btn" onclick="syncTotem()">↺</button>
       </section>
-
-      <button class="cta-primary" onclick="nav('check-in')">Registrar presencia</button>
     </main>
-  </div>
-
-  <!-- ═══════════════════════════════════════
-       VISTA 2 — CHECK-IN
-  ═══════════════════════════════════════ -->
-  <div id="view-check-in" class="view">
-    <header class="top-bar">
-      <button class="back-btn" onclick="nav('home')">←</button>
-      <span class="brand">CHECK-IN</span>
-      <span></span>
-    </header>
-
-    <main class="checkin-main">
-      <section class="orb-section">
-        <div class="orb-ring outer"></div>
-        <div class="orb-ring mid"></div>
-        <div class="orb-core" id="orb-core">
-          <span class="orb-days" id="orb-days">0</span>
-          <span class="orb-unit">días</span>
-        </div>
-      </section>
-
-      <p class="checkin-instruction" id="checkin-msg">
-        Coloca tu mano sobre el tótem<br>o registra manualmente
-      </p>
-
-      <div class="state-badge" id="state-badge">
-        <span class="state-badge-dot"></span>
-        <span id="state-badge-text">Continuidad</span>
-      </div>
-
-      <button class="cta-primary cta-checkin" id="btn-checkin" onclick="doCheckin()">
-        Registrar hoy
-      </button>
-
-      <button class="cta-secondary" onclick="showResetConfirm()">
-        Reiniciar racha
-      </button>
-    </main>
-
-    <div class="modal-overlay" id="modal-reset" style="display:none">
-      <div class="modal-box">
-        <p class="modal-title">¿Reiniciar racha?</p>
-        <p class="modal-body">Tu contador volverá a 0. Tu historial se conservará.</p>
-        <div class="modal-actions">
-          <button class="cta-secondary" onclick="hideResetConfirm()">Cancelar</button>
-          <button class="cta-danger" onclick="doReset()">Sí, reiniciar</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- ═══════════════════════════════════════
@@ -138,7 +86,7 @@
       </div>
 
       <section class="calendar-section">
-        <p class="section-label">Últimas 8 semanas</p>
+        <p class="section-label" id="cal-section-label">Últimas 8 semanas</p>
         <div class="cal-grid" id="cal-grid"></div>
         <div class="cal-legend">
           <span class="cal-dot dot-ok"></span><span>Registrado</span>
@@ -203,12 +151,37 @@
       </section>
 
       <section class="profile-card">
+        <p class="section-label">HORA DEL TÓTEM</p>
+        <div class="profile-row row-input">
+          <span>Hora actual</span>
+          <input id="inp-hora" type="time" />
+        </div>
+        <button class="cta-secondary full-w" onclick="setHoraTotem()">Configurar hora</button>
+      </section>
+
+      <section class="profile-card">
+        <p class="section-label">ESCALA DE TIEMPO (HISTORIAL)</p>
+        <div class="profile-row row-input">
+          <span>Minutos por "día"</span>
+          <input id="inp-duracion-dia" type="number" min="1" placeholder="1440" />
+        </div>
+        <button class="cta-secondary full-w" onclick="setDuracionDia()">Aplicar</button>
+        <p class="profile-hint">Debe coincidir con DURACION_DIA_MS de EMBER/Config.h: 1440 en modo real (24h), o los minutos usados en MODO_DEMO.</p>
+      </section>
+
+      <section class="profile-card">
         <p class="section-label">MENSAJES DIARIOS</p>
         <div id="msgs-list" class="msgs-preview"></div>
         <div class="msg-add-row">
           <input id="inp-new-msg" type="text" placeholder="Añadir mensaje..." />
           <button class="add-msg-btn" onclick="addMessage()">+</button>
         </div>
+      </section>
+
+      <section class="profile-card">
+        <p class="section-label">ZONA DE PELIGRO</p>
+        <button class="cta-secondary full-w cta-warning" onclick="borrarMemoriaTotem()">Borrar memoria del tótem</button>
+        <p class="profile-hint">Borra la racha, los hitos y la hora guardados en el ESP32, y reinicia el historial del backend. No se puede deshacer.</p>
       </section>
     </main>
   </div>
@@ -220,10 +193,6 @@
     <button class="nav-btn active" data-view="home" onclick="nav('home')">
       <svg viewBox="0 0 24 24"><path d="M3 12L12 3l9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h3v-5h6v5h3a1 1 0 001-1v-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Inicio</span>
-    </button>
-    <button class="nav-btn" data-view="check-in" onclick="nav('check-in')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-      <span>Check-in</span>
     </button>
     <button class="nav-btn" data-view="history" onclick="nav('history')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
