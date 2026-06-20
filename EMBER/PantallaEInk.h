@@ -24,6 +24,10 @@ class PantallaEInk {
     void mostrarProgreso(Racha &racha);
     void mostrarHito(Hito &hito);
 
+    // No está en el diagrama de clases original: feedback visual al
+    // entrar a Reinicio/Recuperación (antes no se mostraba nada).
+    void mostrarReinicio();
+
     // mostrarReloj() no recibe parámetros (según diagrama de clases);
     // usa la hora más reciente fijada con actualizarHora(), que el
     // manejo de RTC (Etapas 7/8) llamará antes de cada refresco.
@@ -42,16 +46,15 @@ class PantallaEInk {
     uint8_t horaActual;
     uint8_t minutoActual;
 
+    // Último valor efectivamente dibujado en el panel — mostrarReloj()
+    // no toca el hardware si no cambió, y así el único refresco que
+    // importa (cuando sí cambia) puede ser completo sin que eso
+    // signifique parpadear cada pocos segundos.
+    uint8_t horaDibujada;
+    uint8_t minutoDibujada;
+
     void dibujarEncabezado();
     void refrescarCompleto();          // full update: Init_Fast + Display + Sleep
-    void refrescarParcialReloj();      // partial update solo del área del reloj
-
-    // Convierte un rectángulo en coordenadas lógicas (rotation=270) a las
-    // coordenadas físicas que espera EPD_4IN2_PartialDisplay (ver fórmulas
-    // de rotación en Descripcion/epaper.md). Pendiente de verificar en
-    // hardware real antes de la integración final (Etapa 10).
-    void rectLogicoAFisico(UWORD xl0, UWORD yl0, UWORD xl1, UWORD yl1,
-                            UWORD &xp0, UWORD &yp0, UWORD &xp1, UWORD &yp1);
 };
 
 #endif

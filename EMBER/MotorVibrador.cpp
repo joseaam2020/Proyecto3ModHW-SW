@@ -35,10 +35,11 @@ void MotorVibrador::actualizar() {
 void MotorVibrador::aplicarEstado(SystemState estado) {
   switch (estado) {
     case INGRESO_DIARIO:
-      // Vibración leve de confirmación al registrar la interacción diaria.
+      // Vibración fuerte y continua durante toda la confirmación visual
+      // (mismos DURACION_CONFIRMACION_MS que se muestra "Racha: N dias").
       patron = "confirmacion";
-      setIntensidad(0.4f);
-      vibrar(150);
+      setIntensidad(1.0f);
+      vibrar(DURACION_CONFIRMACION_MS);
       break;
 
     case CELEBRACION:
@@ -53,7 +54,7 @@ void MotorVibrador::aplicarEstado(SystemState estado) {
       patron = "recordatorio";
       if (millis() - ultimoRecordatorioMs >= INTERVALO_RECORDATORIO_RIESGO_MS) {
         ultimoRecordatorioMs = millis();
-        setIntensidad(0.7f);
+        setIntensidad(1.0f);
         vibrar(DURACION_RECORDATORIO_RIESGO_MS);
       }
       break;

@@ -1,7 +1,8 @@
 #include "SensorTactil.h"
 
 SensorTactil::SensorTactil(uint8_t ioPin, float sensibilidad)
-  : ioPin(ioPin), tocado(false), sensibilidad(sensibilidad), ultimoContacto(0) {
+  : ioPin(ioPin), tocado(false), tocadoAnterior(false),
+    sensibilidad(sensibilidad), ultimoContacto(0) {
 }
 
 void SensorTactil::init() {
@@ -11,6 +12,13 @@ void SensorTactil::init() {
 bool SensorTactil::leer() {
   tocado = digitalRead(ioPin);
   return tocado;
+}
+
+bool SensorTactil::detectarToqueNuevo() {
+  bool tocadoAhora = leer();
+  bool esNuevo = tocadoAhora && !tocadoAnterior;
+  tocadoAnterior = tocadoAhora;
+  return esNuevo;
 }
 
 // Marca el contacto actual y devuelve el timestamp registrado.

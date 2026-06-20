@@ -11,15 +11,19 @@
 #define CUERPO_X 10
 #define CUERPO_Y 40
 
-// Rectángulo del reloj: única zona que se refresca parcialmente.
+// Posición del reloj, justo debajo del encabezado "EMBER".
 #define RELOJ_X0 10
-#define RELOJ_Y0 350
-#define RELOJ_X1 110
-#define RELOJ_Y1 390
+#define RELOJ_Y0 35
+
+// Mensaje de "racha reiniciada", debajo del reloj.
+#define REINICIO_MSG_X  10
+#define REINICIO_MSG_Y0 75
+#define REINICIO_MSG_Y1 100
 
 PantallaEInk::PantallaEInk()
   : buffer(nullptr), contenidoActual(""), ultimaActualizacion(0),
-    modoReloj(false), horaActual(0), minutoActual(0) {
+    modoReloj(false), horaActual(0), minutoActual(0),
+    horaDibujada(255), minutoDibujada(255) {
 }
 
 PantallaEInk::~PantallaEInk() {
@@ -64,25 +68,6 @@ void PantallaEInk::refrescarCompleto() {
   ultimaActualizacion = millis();
 }
 
-void PantallaEInk::rectLogicoAFisico(UWORD xl0, UWORD yl0, UWORD xl1, UWORD yl1,
-                                      UWORD &xp0, UWORD &yp0, UWORD &xp1, UWORD &yp1) {
-  // rotation=270: Xp = Yl, Yp = (EPD_4IN2_HEIGHT-1) - Xl (ver epaper.md)
-  xp0 = yl0;
-  xp1 = yl1;
-  yp0 = (EPD_4IN2_HEIGHT - 1) - xl1;
-  yp1 = (EPD_4IN2_HEIGHT - 1) - xl0;
-}
-
-void PantallaEInk::refrescarParcialReloj() {
-  UWORD xp0, yp0, xp1, yp1;
-  rectLogicoAFisico(RELOJ_X0, RELOJ_Y0, RELOJ_X1, RELOJ_Y1, xp0, yp0, xp1, yp1);
-
-  EPD_4IN2_Init_Partial();
-  EPD_4IN2_PartialDisplay(xp0, yp0, xp1, yp1, buffer);
-  EPD_4IN2_Sleep();
-  ultimaActualizacion = millis();
-}
-
 void PantallaEInk::mostrarProgreso(Racha &racha) {
   Paint_Clear(WHITE);
   dibujarEncabezado();
@@ -110,29 +95,69 @@ void PantallaEInk::mostrarHito(Hito &hito) {
   modoReloj = false;
 }
 
+void PantallaEInk::mostrarReinicio() {
+  // Pantalla persistente (igual que el reloj normal, pero con un mensaje
+  // adicional): muestra el reloj actual + el aviso de racha reiniciada
+  // juntos. Los refrescos posteriores del reloj (mostrarReloj) detectan
+  // contenidoActual == "reinicio" y redibujan este mensaje también, para
+  // no perderlo (el refresco es siempre completo, ver mostrarReloj()).
+  char linea[16];
+  snprintf(linea, sizeof(linea), "%02d:%02d", horaActual, minutoActual);
+
+  Paint_Clear(WHITE);
+  dibujarEncabezado();
+  Paint_DrawString_EN(RELOJ_X0, RELOJ_Y0, linea, &Font24, BLACK, WHITE);
+  Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y0, "Racha reiniciada", &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y1, "El dia 1 te espera", &Font12, BLACK, WHITE);
+
+  refrescarCompleto();
+  contenidoActual = "reinicio";
+  horaDibujada = horaActual;
+  minutoDibujada = minutoActual;
+  modoReloj = true;
+}
+
 void PantallaEInk::actualizarHora(uint8_t horas, uint8_t minutos) {
   horaActual = horas;
   minutoActual = minutos;
 }
 
 void PantallaEInk::mostrarReloj() {
+  bool veniamosDeOtraPantalla = (contenidoActual != "reloj" && contenidoActual != "reinicio");
+
+  // Si ya estábamos mostrando el reloj (o reinicio) y la hora no cambió
+  // desde el último dibujo, no hay nada que hacer — no tocamos el panel.
+  if (!veniamosDeOtraPantalla && horaActual == horaDibujada && minutoActual == minutoDibujada) {
+    modoReloj = true;
+    return;
+  }
+
+  // El refresco es SIEMPRE completo, nunca parcial: el refresco parcial
+  // de este panel no es confiable (ver Descripcion/epaper.md, "Poor
+  // display" es el propio comentario del fabricante) — a veces el
+  // comando se envía pero el panel no voltea los píxeles, dejando un
+  // valor de reloj viejo en pantalla sin avisar. Como solo se llega
+  // aquí cuando el valor realmente cambió (~1 vez por minuto), el
+  // parpadeo de pantalla completa no es tan frecuente como antes de
+  // tener este chequeo.
   char linea[16];
   snprintf(linea, sizeof(linea), "%02d:%02d", horaActual, minutoActual);
 
-  if (contenidoActual != "reloj") {
-    // Primera vez en modo reloj: redibujar todo el fondo + reloj.
-    Paint_Clear(WHITE);
-    dibujarEncabezado();
-    Paint_DrawString_EN(RELOJ_X0, RELOJ_Y0, linea, &Font24, BLACK, WHITE);
-    refrescarCompleto();
+  Paint_Clear(WHITE);
+  dibujarEncabezado();
+  Paint_DrawString_EN(RELOJ_X0, RELOJ_Y0, linea, &Font24, BLACK, WHITE);
+  if (contenidoActual == "reinicio") {
+    // Un refresco completo borra todo el buffer: hay que redibujar
+    // también el aviso de racha reiniciada, o se perdería.
+    Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y0, "Racha reiniciada", &Font16, BLACK, WHITE);
+    Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y1, "El dia 1 te espera", &Font12, BLACK, WHITE);
   } else {
-    // Ya estábamos en modo reloj: solo refrescar el área del reloj.
-    Paint_ClearWindows(RELOJ_X0, RELOJ_Y0, RELOJ_X1, RELOJ_Y1, WHITE);
-    Paint_DrawString_EN(RELOJ_X0, RELOJ_Y0, linea, &Font24, BLACK, WHITE);
-    refrescarParcialReloj();
+    contenidoActual = "reloj";
   }
 
-  contenidoActual = "reloj";
+  refrescarCompleto();
+  horaDibujada = horaActual;
+  minutoDibujada = minutoActual;
   modoReloj = true;
 }
 

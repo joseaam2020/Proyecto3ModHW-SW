@@ -60,6 +60,20 @@ class Totem {
 
     unsigned long tiempoEntradaEstado;
     unsigned long ultimoRefrescoReloj;
+    unsigned long ultimaLecturaProximidadMs;
+
+    // Horario fijo de "día" (ver DURACION_DIA_MS): inicioDiaMs marca
+    // cuándo empezó el día actual; yaInteractuoHoy bloquea un segundo
+    // registro hasta que el día termine, sin importar cuándo se tocó.
+    unsigned long inicioDiaMs;
+    bool yaInteractuoHoy;
+
+    // Plazo de Riesgo/Inactividad: NO es una duración fija propia, es lo
+    // que queda del día actual (inicioDiaMs + DURACION_DIA_MS) en el
+    // momento de entrar a Riesgo. Se calcula una sola vez al entrar y no
+    // se reajusta con el horario de "día" — si se reajustara, el plazo
+    // nunca terminaría de cumplirse.
+    unsigned long limiteRiesgoMs;
 
     // Hora base conocida (última recibida del backend, o la persistida de
     // un encendido anterior) + el millis() en que se fijó. El reloj actual

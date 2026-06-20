@@ -1,4 +1,5 @@
 #include "LEDController.h"
+#include "Config.h"
 
 LEDController::LEDController(uint8_t rPin, uint8_t gPin, uint8_t bPin)
   : rPin(rPin), gPin(gPin), bPin(bPin), intensidad(1.0f), patron("solido") {
@@ -50,7 +51,7 @@ void LEDController::aplicarEstado(SystemState estado) {
     case RIESGO_INACTIVIDAD:
       patron = "alerta";
       setIntensidad(0.8f);
-      setColor(255, 150, 0); // ámbar — advertencia, no punitivo
+      setColor(255, 0, 0); // rojo — advertencia
       break;
 
     case REINICIO_RECUPERACION:
@@ -60,11 +61,18 @@ void LEDController::aplicarEstado(SystemState estado) {
       break;
 
     case CELEBRACION: {
-      // Animación arcoíris: cada llamada avanza el hue un paso.
-      // Debe invocarse repetidamente durante DURACION_CELEBRACION_MS.
+      // Animación arcoíris lenta: el color solo avanza cada
+      // INTERVALO_PASO_ARCOIRIS_MS, aunque esto se llame en cada
+      // loop() (que corre mucho más rápido que eso).
       patron = "celebracion";
+      static unsigned long ultimoPaso = 0;
       static float hue = 0.0f;
-      hue = (hue >= 360.0f) ? 0.0f : hue + 6.0f;
+
+      if (millis() - ultimoPaso < INTERVALO_PASO_ARCOIRIS_MS) {
+        break;
+      }
+      ultimoPaso = millis();
+      hue = (hue >= 360.0f) ? 0.0f : hue + INCREMENTO_HUE_ARCOIRIS;
 
       int i = (int)(hue / 60.0f) % 6;
       float f = (hue / 60.0f) - (int)(hue / 60.0f);
