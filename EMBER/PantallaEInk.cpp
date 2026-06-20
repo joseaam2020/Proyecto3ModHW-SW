@@ -2,6 +2,7 @@
 #include "Racha.h"
 #include "Hito.h"
 #include <stdlib.h>
+#include <string.h>
 
 // Layout en coordenadas LÓGICAS (canvas portrait 300×400, origen top-left,
 // rotation=270 — ver Descripcion/epaper.md).
@@ -20,10 +21,119 @@
 #define REINICIO_MSG_Y0 75
 #define REINICIO_MSG_Y1 100
 
+// Posiciones para mensaje inferior (pantalla portrait 300x400)
+#define BOTTOM_MSG_Y0 300
+#define BOTTOM_MSG_Y1 335
+
 PantallaEInk::PantallaEInk()
   : buffer(nullptr), contenidoActual(""), ultimaActualizacion(0),
     modoReloj(false), horaActual(0), minutoActual(0),
     horaDibujada(255), minutoDibujada(255) {
+}
+
+// Canvas logical size (portrait)
+#define CANVAS_W 300
+#define CANVAS_H 400
+#define CENTER_X (CANVAS_W/2)
+
+// Heurística simple para estimar ancho en píxeles de un texto para centrarlo.
+static int estimateTextWidth(const sFONT *font, const char *s) {
+  size_t len = strlen(s);
+  int w = 0;
+  if (font == &Font24) {
+    w = 18; // approx per char
+  } else if (font == &Font16) {
+    w = 12;
+  } else if (font == &Font12) {
+    w = 9;
+  } else {
+    w = 10;
+  }
+  return (int)len * w;
+}
+
+// Dibuja un rectángulo relleno usando Paint_SetPixel (por compatibilidad).
+static void drawFilledRect(int x0, int y0, int w, int h, UBYTE color) {
+  int xStart = x0 < 0 ? 0 : x0;
+  int yStart = y0 < 0 ? 0 : y0;
+  int xEnd = x0 + w;
+  int yEnd = y0 + h;
+  if (xEnd > CANVAS_W) xEnd = CANVAS_W;
+  if (yEnd > CANVAS_H) yEnd = CANVAS_H;
+  for (int xx = xStart; xx < xEnd; ++xx) {
+    for (int yy = yStart; yy < yEnd; ++yy) {
+      Paint_SetPixel(xx, yy, color);
+    }
+  }
+}
+
+// Dibuja un dígito grande estilo "seven-seg-ish" con grosor relativo.
+static void drawBigDigit(int x, int y, char digit, int scale, UBYTE color) {
+  // base height ~24 per unit scale
+  int h = 24 * scale;
+  int w = (h * 6) / 10; // aspect ratio
+  int t = (h / 6 > 2) ? (h / 6) : 2; // thickness
+
+  // segment rectangles
+  int ax = x + t;
+  int ay = y;
+  int aw = w - 2 * t;
+  int ah = t;
+
+  int dx = x + t;
+  int dy = y + h - t;
+  int dw = aw;
+  int dh = t;
+
+  int fx = x;
+  int fy = y + t;
+  int fw = t;
+  int fh = h / 2 - t;
+
+  int bx = x + w - t;
+  int by = y + t;
+  int bw = t;
+  int bh = h / 2 - t;
+
+  int gx = x + t;
+  int gy = y + h/2 - t/2;
+  int gw = aw;
+  int gh = t;
+
+  int ex = x;
+  int ey = y + h/2;
+  int ew = t;
+  int eh = h / 2 - t;
+
+  // segments: A,B,C,D,E,F,G
+  bool segA=false, segB=false, segC=false, segD=false, segE=false, segF=false, segG=false;
+  switch (digit) {
+    case '0': segA=segB=segC=segD=segE=segF=true; break;
+    case '1': segB=segC=true; break;
+    case '2': segA=segB=segG=segE=segD=true; break;
+    case '3': segA=segB=segG=segC=segD=true; break;
+    case '4': segF=segG=segB=segC=true; break;
+    case '5': segA=segF=segG=segC=segD=true; break;
+    case '6': segA=segF=segG=segE=segC=segD=true; break;
+    case '7': segA=segB=segC=true; break;
+    case '8': segA=segB=segC=segD=segE=segF=segG=true; break;
+    case '9': segA=segB=segC=segD=segF=segG=true; break;
+    default: break;
+  }
+
+  if (segA) drawFilledRect(ax, ay, aw, ah, color);
+  if (segB) drawFilledRect(bx, by, bw, bh, color);
+  if (segC) drawFilledRect(bx, by + h/2, bw, bh, color);
+  if (segD) drawFilledRect(dx, dy, dw, dh, color);
+  if (segE) drawFilledRect(ex, ey + t/2, ew, eh, color);
+  if (segF) drawFilledRect(fx, fy, fw, fh, color);
+  if (segG) drawFilledRect(gx, gy, gw, gh, color);
+}
+
+static void drawBigColon(int x, int y, int scale, UBYTE color) {
+  int size = (scale * 4 > 2) ? (scale * 4) : 2;
+  drawFilledRect(x, y - size - 6, size, size, color);
+  drawFilledRect(x, y + 6, size, size, color);
 }
 
 PantallaEInk::~PantallaEInk() {
@@ -58,7 +168,10 @@ void PantallaEInk::init() {
 }
 
 void PantallaEInk::dibujarEncabezado() {
-  Paint_DrawString_EN(ENCABEZADO_X, ENCABEZADO_Y, "EMBER", &Font16, BLACK, WHITE);
+  const char *hdr = "EMBER";
+  int w = estimateTextWidth(&Font16, hdr);
+  int x = CENTER_X - w/2;
+  Paint_DrawString_EN(x, ENCABEZADO_Y, hdr, &Font16, BLACK, WHITE);
 }
 
 void PantallaEInk::refrescarCompleto() {
@@ -106,9 +219,49 @@ void PantallaEInk::mostrarReinicio() {
 
   Paint_Clear(WHITE);
   dibujarEncabezado();
-  Paint_DrawString_EN(RELOJ_X0, RELOJ_Y0, linea, &Font24, BLACK, WHITE);
-  Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y0, "Racha reiniciada", &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y1, "El dia 1 te espera", &Font12, BLACK, WHITE);
+
+  // Hora en dos bloques apilados (horas arriba, minutos abajo), centrados.
+  char horas[3];
+  char minutos[3];
+  snprintf(horas, sizeof(horas), "%02d", horaActual);
+  snprintf(minutos, sizeof(minutos), "%02d", minutoActual);
+
+  // Dibujar hora grande (scale 4) con minutos apilados debajo
+  int scale = 4;
+  int h = 24 * scale;
+  int digitW = (h * 6) / 10;
+  int spacing = scale * 6;
+  int hourTotalWidth = 2 * digitW + spacing;
+  int startXHour = CENTER_X - hourTotalWidth / 2;
+  int hourY = 50;
+  int xh = startXHour;
+  drawBigDigit(xh, hourY, horas[0], scale, BLACK);
+  xh += digitW + spacing;
+  drawBigDigit(xh, hourY, horas[1], scale, BLACK);
+
+  // colon to the right of the hours, vertically centered between hours and minutes
+  int colonX = startXHour + hourTotalWidth + scale * 4;
+  int colonY = hourY + h / 2;
+  drawBigColon(colonX, colonY, scale, BLACK);
+
+  // minutos centrados debajo de las horas
+  int minuteTotalWidth = 2 * digitW + spacing;
+  int startXMin = CENTER_X - minuteTotalWidth / 2;
+  int minY = hourY + h + 8;
+  int xm = startXMin;
+  drawBigDigit(xm, minY, minutos[0], scale, BLACK);
+  xm += digitW + spacing;
+  drawBigDigit(xm, minY, minutos[1], scale, BLACK);
+
+  // Mensaje de reinicio: dos líneas en la parte inferior
+  const char *msg1 = "Racha reiniciada";
+  const char *msg2 = "el dia uno te espera";
+  int wMsg1 = estimateTextWidth(&Font16, msg1);
+  int xMsg1 = CENTER_X - wMsg1/2;
+  Paint_DrawString_EN(xMsg1, 300, msg1, &Font16, BLACK, WHITE);
+  int wMsg2 = estimateTextWidth(&Font12, msg2);
+  int xMsg2 = CENTER_X - wMsg2/2;
+  Paint_DrawString_EN(xMsg2, 330, msg2, &Font12, BLACK, WHITE);
 
   refrescarCompleto();
   contenidoActual = "reinicio";
@@ -145,13 +298,46 @@ void PantallaEInk::mostrarReloj() {
 
   Paint_Clear(WHITE);
   dibujarEncabezado();
-  Paint_DrawString_EN(RELOJ_X0, RELOJ_Y0, linea, &Font24, BLACK, WHITE);
-  if (contenidoActual == "reinicio") {
-    // Un refresco completo borra todo el buffer: hay que redibujar
-    // también el aviso de racha reiniciada, o se perdería.
-    Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y0, "Racha reiniciada", &Font16, BLACK, WHITE);
-    Paint_DrawString_EN(REINICIO_MSG_X, REINICIO_MSG_Y1, "El dia 1 te espera", &Font12, BLACK, WHITE);
-  } else {
+  // Dibujar la hora en dos bloques apilados, centrados
+  char horas[3];
+  char minutos[3];
+  snprintf(horas, sizeof(horas), "%02d", horaActual);
+  snprintf(minutos, sizeof(minutos), "%02d", minutoActual);
+
+  // Dibujar hora grande (scale 4) con minutos apilados debajo
+  int scale = 4;
+  int h = 24 * scale;
+  int digitW = (h * 6) / 10;
+  int spacing = scale * 6;
+  int hourTotalWidth = 2 * digitW + spacing;
+  int startXHour = CENTER_X - hourTotalWidth / 2;
+  int hourY = 50;
+  int xh = startXHour;
+  drawBigDigit(xh, hourY, horas[0], scale, BLACK);
+  xh += digitW + spacing;
+  drawBigDigit(xh, hourY, horas[1], scale, BLACK);
+
+  // colon to the right of the hours, vertically centered between hours and minutes
+  int colonX = startXHour + hourTotalWidth + scale * 4;
+  int colonY = hourY + h / 2;
+  drawBigColon(colonX, colonY, scale, BLACK);
+
+  // minutos centrados debajo de las horas
+  int minuteTotalWidth = 2 * digitW + spacing;
+  int startXMin = CENTER_X - minuteTotalWidth / 2;
+  int minY = hourY + h + 8;
+  int xm = startXMin;
+  drawBigDigit(xm, minY, minutos[0], scale, BLACK);
+  xm += digitW + spacing;
+  drawBigDigit(xm, minY, minutos[1], scale, BLACK);
+
+  // Mensaje final siempre presente en la parte inferior
+  const char *msg = "Hoy eliges bienestar";
+  int wMsg = estimateTextWidth(&Font16, msg);
+  int xMsg = CENTER_X - wMsg/2;
+  Paint_DrawString_EN(xMsg, 320, msg, &Font16, BLACK, WHITE);
+
+  if (contenidoActual != "reinicio") {
     contenidoActual = "reloj";
   }
 
